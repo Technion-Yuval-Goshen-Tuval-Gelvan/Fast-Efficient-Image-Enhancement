@@ -4,6 +4,7 @@ import torchvision
 from FEQEModel import FeqeModel
 from DataSet import Div2k
 from torch.utils.tensorboard import SummaryWriter
+from VGGLoss import VGGPerceptualLoss
 import time
 
 
@@ -18,6 +19,7 @@ CHANNELS = 32
 LEARNING_RATE = 1e-4
 EPOCHS = 50
 CHECKPOINT_EVERY = 5
+VGG_LOSS_WEIGHT = 1e-3
 
 
 if torch.cuda.is_available():
@@ -33,14 +35,17 @@ dataset_train = Div2k('Data/Train/', transform=transform)
 data_loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=BATCH_SIZE,
                                                 shuffle=True, num_workers=0)
 
-dataset_test = Div2k('Data/Test/', transform=transform)
-data_loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=100,
+dataset_test = Div2k('Data/Test/')
+data_loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=1,
                                                shuffle=True, drop_last=True, num_workers=0)
 
 model = FeqeModel(num_residual_blocks=RESIDUAL_BLOCKS, channels=CHANNELS).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE,
                              betas=(0.9, 0.999), eps=1e-08)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2*EPOCHS//3, gamma=0.1)
+
+vgg_loss_fn = VGGPerceptualLoss(resize=False).to(device)
+
 
 writer = SummaryWriter(comment=RUN_NAME)
 
@@ -51,14 +56,19 @@ for epoch in range(EPOCHS+1):
         im_batch_lowres = down_sample(im_batch, LOW_RES_SCALE)
 
         im_batch_lowres_recon = model(im_batch_lowres)
-        loss = torch.nn.MSELoss()(im_batch_lowres_recon, im_batch)
+        mse_loss = torch.nn.MSELoss()(im_batch_lowres_recon, im_batch)
+        vgg_loss = vgg_loss_fn(im_batch_lowres_recon, im_batch)
+        loss = (1-VGG_LOSS_WEIGHT) * mse_loss + VGG_LOSS_WEIGHT * vgg_loss
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        writer.add_scalar('Loss/train', loss.item(), epoch*len(data_loader_train)+i)
-        writer.add_scalar('Metrics/PSNR_Train', psnr(im_batch*255, im_batch_lowres_recon*255), epoch*len(data_loader_train)+i)
+        iter =  epoch*len(data_loader_train)+i
+        writer.add_scalar('Loss/loss', loss.item(), iter)
+        writer.add_scalar('Loss/mse_loss', mse_loss.item(), iter)
+        writer.add_scalar('Loss/vgg_loss', vgg_loss.item(), iter)
+        writer.add_scalar('Metrics/PSNR_Train', psnr(im_batch*255, im_batch_lowres_recon*255), iter)
 
     # evaluate on test set
     with torch.no_grad():
