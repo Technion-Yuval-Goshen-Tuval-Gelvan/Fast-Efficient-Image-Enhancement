@@ -1,0 +1,7 @@
+
+* improve training loop (take things out to functions, checkpoints...)
+* add VGG loss
+* add SSIM metric and PI
+* Run experiments with different number of layers and channels
+* Run long Expirement on cuda
+
