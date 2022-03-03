@@ -16,7 +16,7 @@ NUM_WORKERS = 0
 RESIDUAL_BLOCKS = 5
 CHANNELS = 32
 LEARNING_RATE = 1e-4
-EPOCHS = 100
+EPOCHS = 50
 CHECKPOINT_EVERY = 5
 
 
@@ -40,6 +40,7 @@ data_loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=100,
 model = FeqeModel(num_residual_blocks=RESIDUAL_BLOCKS, channels=CHANNELS).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE,
                              betas=(0.9, 0.999), eps=1e-08)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2*EPOCHS//3, gamma=0.1)
 
 writer = SummaryWriter(comment=RUN_NAME)
 
@@ -74,6 +75,8 @@ for epoch in range(EPOCHS+1):
 
     if epoch % CHECKPOINT_EVERY == 0:
         torch.save(model, 'checkpoints/' + RUN_NAME + '_' + str(epoch) + '.pth')
+
+    scheduler.step()
 
     print("Epoch: {}/{}".format(epoch, EPOCHS), "Time: {:.2f}".format(time.time() - start))
 
