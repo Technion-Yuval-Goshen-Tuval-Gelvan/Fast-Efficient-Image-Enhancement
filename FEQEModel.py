@@ -47,4 +47,7 @@ class FeqeModel(nn.Module):
         out = self.residual_blocks(out)
         out = self.upsample(out)
 
-        return x + out
+        output = x + out
+        output = torch.clip(output, 0, 1)
+
+        return output
